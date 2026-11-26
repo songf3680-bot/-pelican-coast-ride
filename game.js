@@ -4,18 +4,20 @@ export const WHEEL_AXLE_OFFSET = 17
 export const WHEEL_RADIUS = 12
 
 const PIXELS_PER_METER = 10
-const FIRST_SEGMENT = 360
+const FIRST_CASTLE = 360
+const FIRST_SEGMENT = FIRST_CASTLE + 96
 const SEGMENT_LENGTH = 400
 const LOOKAHEAD = 520
 const MAX_FRAME = 0.05
 const STEP = 1 / 120
 const MIN_JUMP_DISTANCE = 180
-const MIN_JUMP_TIME = 1.34
+const MIN_JUMP_TIME = 1.05
+const JUMP_APEX = 0.55
 const JUMP_HEIGHT = 48
 const JUMP_EDGE_HEIGHT = 10
 const JUMP_EDGE_DISTANCE = 10
-const COAST_SPEED = 96
-const BRAKE_SPEED = 68
+const COAST_SPEED = 172
+const BRAKE_SPEED = 144
 const ACCELERATION = 180
 const CASTLE_HALF_WIDTH = 5
 const CASTLE_TOP = 12
@@ -46,7 +48,7 @@ export function createGame(best = 0) {
     time: 0,
     score: 0,
     best: record,
-    objects: [fish(132), fish(176), castle(264), fish(264, 73)],
+    objects: [fish(132), fish(176), castle(FIRST_CASTLE), fish(FIRST_CASTLE, 73)],
     nextSegment: FIRST_SEGMENT
   }
 }
@@ -94,8 +96,8 @@ function hitsCastle(gap, y) {
 }
 
 function adjustGroundSpeed(state, dt, input) {
-  const cruise = COAST_SPEED + Math.min(38, state.distance / 145)
-  const target = input.brake ? BRAKE_SPEED : input.boost ? cruise + 52 : cruise
+  const cruise = COAST_SPEED + Math.min(20, state.distance / 145)
+  const target = input.brake ? BRAKE_SPEED : input.boost ? cruise + 44 : cruise
   const change = target - state.speed
   state.speed += Math.sign(change) * Math.min(Math.abs(change), ACCELERATION * dt)
 }
@@ -112,7 +114,10 @@ function updateJumpHeight(state) {
   // Rise briskly off the ground so a late jump can still clear the obstacle.
   const progress = travelled / length
   const edge = Math.min(1, travelled / JUMP_EDGE_DISTANCE, (length - travelled) / JUMP_EDGE_DISTANCE)
-  const arch = 4 * (JUMP_HEIGHT - JUMP_EDGE_HEIGHT) * progress * (1 - progress)
+  // Peak slightly after halfway, then land on a steeper curve.
+  const half = progress < JUMP_APEX ? JUMP_APEX : 1 - JUMP_APEX
+  const fromPeak = Math.abs(progress - JUMP_APEX) / half
+  const arch = (JUMP_HEIGHT - JUMP_EDGE_HEIGHT) * (1 - fromPeak ** 1.75)
   state.y = arch + JUMP_EDGE_HEIGHT * edge * (2 - edge)
 }
 

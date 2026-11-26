@@ -89,22 +89,44 @@ test('a jump holds its takeoff speed through midair control changes until touchd
   assert.ok(update(airborne, frame, { brake: true }).speed < airborne.speed)
 })
 
-for (const [control, input, minTravel, initialDistance] of [
-  ['braking', { brake: true }, 155, 0],
-  ['coasting', {}, 155, 0],
-  ['at full boost', { boost: true }, 235, 6000]
+for (const [control, input, minTravel, maxAirtime, initialDistance] of [
+  ['braking', { brake: true }, 155, 1.27, 0],
+  ['coasting', {}, 155, 1.12, 0],
+  ['boosting at top speed', { boost: true }, 235, 1.4, 6000]
 ]) {
-  test(`a jump covers at least ${minTravel}px before landing while ${control}`, () => {
-    const takeoff = advance(ride({ distance: initialDistance }), 0.6, input)
+  test(`a jump stays brisk and covers at least ${minTravel}px while ${control}`, () => {
+    const takeoff = advance(ride({ distance: initialDistance }), 0.8, input)
     const airborne = update(takeoff, physicsStep, { ...input, jump: true })
     assert.ok(airborne.y > 0)
     const landed = advanceToLanding(airborne, input)
     assert.equal(landed.status, 'running')
     assert.equal(landed.y, 0)
     const travel = landed.distance - takeoff.distance
+    const airtime = landed.time - takeoff.time
     assert.ok(travel >= minTravel, `jump covered only ${travel.toFixed(1)}px`)
+    assert.ok(airtime <= maxAirtime, `jump took ${airtime.toFixed(2)}s (limit ${maxAirtime}s)`)
   })
 }
+
+test('even at braking speed, the bike passes the highest pixel row without hovering', () => {
+  const takeoff = advance(ride(), 0.8, { brake: true })
+  let state = update(takeoff, physicsStep, { jump: true })
+  let peakRow = 0
+  let timeAtPeak = 0
+  while (state.jumpStart !== null && state.time - takeoff.time < landingTimeout) {
+    const row = Math.round(state.y)
+    if (row > peakRow) {
+      peakRow = row
+      timeAtPeak = 0
+    }
+    if (row === peakRow) {
+      timeAtPeak += physicsStep
+    }
+    state = update(state, physicsStep)
+  }
+  assert.ok(peakRow > 0 && state.jumpStart === null)
+  assert.ok(timeAtPeak < 0.13, `stayed at the highest pixel row for ${timeAtPeak.toFixed(2)}s`)
+})
 
 test('a collected fish only adds one point and leaves the next frame collectible-free', () => {
   const fish = Object.freeze({ x: 32, kind: 'fish', height: 38 })
@@ -188,13 +210,22 @@ for (const takeoffGap of [31, 44, 100]) {
     let state = start(createGame())
     const firstCastle = state.objects.find(({ kind }) => kind === 'castle')
     const input = { brake: true }
-    while (state.status === 'running' && state.distance < firstCastle.x - takeoffGap) {
+    const takeoffDistance = firstCastle.x - takeoffGap
+    while (state.status === 'running' && state.distance < takeoffDistance) {
+      const timeToTakeoff = (takeoffDistance - state.distance) / state.speed
+      // At the late boundary, sample the exact input time instead of crossing it in one frame.
+      if (takeoffGap === 31 && timeToTakeoff < frame) {
+        state = update(state, timeToTakeoff, input)
+        break
+      }
       state = update(state, frame, input)
     }
     assert.equal(state.status, 'running')
-    state = advance(update(state, frame, { ...input, jump: true }), 0.9, input)
-    assert.equal(state.status, 'running')
-    assert.ok(state.y > 0, 'the rider is still airborne late in the jump')
+    if (takeoffGap === 31) {
+      assert.ok(Math.abs(state.distance - takeoffDistance) < 1e-8)
+    }
+    state = update(state, frame, { ...input, jump: true })
+    assert.ok(state.y > 0)
     state = advanceToLanding(state, input)
     assert.equal(state.status, 'running')
     assert.equal(state.y, 0)
@@ -204,12 +235,13 @@ for (const takeoffGap of [31, 44, 100]) {
 
 test('boosting leaves time to land and jump again between closely spaced sandcastles', () => {
   const finish = 7200
+  const topSpeed = advance(ride({ distance: 6000 }), 0.8, { boost: true }).speed
   let state = start(createGame())
   let fullSpeedJumps = 0
   for (let elapsed = 0; elapsed < 50 && state.distance < finish; elapsed += frame) {
     const castle = state.objects.find(({ kind, x }) => kind === 'castle' && x > state.distance)
     const jump = state.y === 0 && !!castle && castle.x - state.distance <= 40
-    if (jump && state.speed >= 185) {
+    if (jump && state.speed >= topSpeed - 1) {
       fullSpeedJumps += 1
     }
     state = update(state, frame, { boost: true, jump })
@@ -222,8 +254,9 @@ test('boosting leaves time to land and jump again between closely spaced sandcas
 test('the rear wheel collides only if it lands before clearing the sandcastle', () => {
   const castle = { x: 264, kind: 'castle', height: 0 }
   const input = { brake: true }
+  const braking = advance(ride({ objects: [castle] }), 0.8, input)
   const jumpFrom = (gap) => {
-    const takeoff = ride({ objects: [castle], speed: 68, distance: castle.x - gap })
+    const takeoff = { ...braking, distance: castle.x - gap }
     return advanceToLanding(update(takeoff, physicsStep, { ...input, jump: true }), input)
   }
 
