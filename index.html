@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#102828" />
+    <meta name="description" content="在夕阳下骑过海岸，跳开障碍，收集沿途的小鱼。" />
+    <title>鹈鹕海岸骑行</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./main.js"></script>
+  </head>
+  <body>
+    <main class="cabinet" aria-labelledby="game-title">
+      <header class="masthead">
+        <span class="brand-tile" aria-hidden="true"><span class="brand-bird"></span></span>
+        <div>
+          <p class="wordmark" aria-hidden="true">PELICAN COAST RIDE</p>
+          <h1 id="game-title">鹈鹕海岸骑行</h1>
+        </div>
+      </header>
+
+      <section class="machine" aria-label="游戏区">
+        <div class="instrument-panel">
+          <dl class="telemetry" aria-label="骑行数据">
+            <div class="reading">
+              <dt>里程</dt>
+              <dd><span id="distance">0</span><small> m</small></dd>
+            </div>
+            <div class="reading">
+              <dt>鱼获</dt>
+              <dd class="fish-count"><span id="score">0</span></dd>
+            </div>
+            <div class="reading">
+              <dt>最佳里程</dt>
+              <dd><span id="best">0</span><small> m</small></dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            class="pause-button"
+            id="pause"
+            aria-keyshortcuts="P Escape"
+            disabled
+          >
+            <span class="pause-glyph" aria-hidden="true"></span>
+            <span id="pause-label">暂停</span>
+          </button>
+        </div>
+
+        <div class="viewport">
+          <canvas
+            id="game"
+            width="480"
+            height="270"
+            tabindex="-1"
+            role="img"
+            aria-label="像素鹈鹕在夕阳下沿海岸公路骑行"
+          >
+            此游戏需要支持 Canvas 的浏览器。
+          </canvas>
+          <div
+            id="overlay"
+            class="overlay"
+            role="region"
+            aria-labelledby="overlay-title"
+            aria-describedby="overlay-message"
+          >
+            <div class="overlay-card">
+              <h2 id="overlay-title">沿海骑一程</h2>
+              <p id="overlay-message">跳过路障，收集沿途的小鱼。</p>
+              <button type="button" id="primary-action" class="primary-button">开始骑行</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-panel" role="group" aria-label="骑行控制">
+          <button type="button" class="pedal" id="brake" aria-keyshortcuts="ArrowLeft A">
+            <span>刹车</span><kbd aria-hidden="true">←</kbd>
+          </button>
+          <button type="button" class="pedal" id="boost" aria-keyshortcuts="ArrowRight D">
+            <span>加速</span><kbd aria-hidden="true">→</kbd>
+          </button>
+          <button
+            type="button"
+            class="pedal jump-pedal"
+            id="jump"
+            aria-keyshortcuts="Space ArrowUp W"
+          >
+            <span>跳跃</span><kbd aria-hidden="true">SPACE</kbd>
+          </button>
+        </div>
+      </section>
+
+      <p class="shortcuts">
+        <kbd>←</kbd><kbd>→</kbd> 调整车速 <span aria-hidden="true">·</span> <kbd>空格</kbd> 跳跃
+        <span aria-hidden="true">·</span> <kbd>P</kbd> 暂停
+      </p>
+      <p id="status" class="visually-hidden" role="status"></p>
+      <noscript><p class="notice">请启用 JavaScript 开始骑行。</p></noscript>
+    </main>
+  </body>
+</html>

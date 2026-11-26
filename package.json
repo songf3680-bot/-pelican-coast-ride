@@ -1,0 +1,11 @@
+{
+  "name": "orca-pelican-ride",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "python3 tests/serve.py",
+    "test": "node --test \"tests/*.test.js\"",
+    "test:watch": "node tests/watch.js"
+  }
+}
