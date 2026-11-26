@@ -1,7 +1,6 @@
-import { GROUND_Y as GROUND, PLAYER_X } from './game.js'
+import { GROUND_Y as GROUND, PLAYER_X, WHEEL_AXLE_OFFSET, WHEEL_RADIUS } from './game.js'
 
 const WIDTH = 480
-const WHEEL_RADIUS = 12
 const CRANK = { x: -2, y: -14, radius: 4.5 }
 
 const SKY = [
@@ -437,8 +436,8 @@ function drawWheel(ctx, x, y, angle) {
 }
 
 function drawBike(ctx, angle) {
-  drawWheel(ctx, -17, -12, angle)
-  drawWheel(ctx, 17, -12, angle)
+  drawWheel(ctx, -WHEEL_AXLE_OFFSET, -WHEEL_RADIUS, angle)
+  drawWheel(ctx, WHEEL_AXLE_OFFSET, -WHEEL_RADIUS, angle)
   const tubes = [
     [-17, -12, -7, -28],
     [-17, -12, -2, -14],

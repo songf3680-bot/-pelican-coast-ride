@@ -229,6 +229,11 @@ canvas {
   image-rendering: pixelated;
 }
 
+canvas.can-jump {
+  cursor: pointer;
+  touch-action: pinch-zoom;
+}
+
 canvas:focus-visible {
   outline: 2px solid var(--lime);
   outline-offset: -3px;
@@ -366,7 +371,7 @@ canvas:focus-visible {
   color: #edf5dc;
   font: 700 12px/1 var(--mono);
 }
-.shortcuts span {
+.shortcut-divider {
   margin: 0 3px;
 }
 .notice {
@@ -424,7 +429,7 @@ canvas:focus-visible {
 
 @media (hover: none) {
   .pedal kbd,
-  .shortcuts {
+  .keyboard-shortcut {
     display: none;
   }
 }

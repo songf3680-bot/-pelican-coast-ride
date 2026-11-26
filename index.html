@@ -56,6 +56,7 @@
             tabindex="-1"
             role="img"
             aria-label="像素鹈鹕在夕阳下沿海岸公路骑行"
+            aria-describedby="canvas-help"
           >
             此游戏需要支持 Canvas 的浏览器。
           </canvas>
@@ -68,7 +69,7 @@
           >
             <div class="overlay-card">
               <h2 id="overlay-title">沿海骑一程</h2>
-              <p id="overlay-message">跳过路障，收集沿途的小鱼。</p>
+              <p id="overlay-message">点击画面跳过沙堡，沿途收集小鱼。</p>
               <button type="button" id="primary-action" class="primary-button">开始骑行</button>
             </div>
           </div>
@@ -93,8 +94,11 @@
       </section>
 
       <p class="shortcuts">
-        <kbd>←</kbd><kbd>→</kbd> 调整车速 <span aria-hidden="true">·</span> <kbd>空格</kbd> 跳跃
-        <span aria-hidden="true">·</span> <kbd>P</kbd> 暂停
+        <span class="keyboard-shortcut"><kbd>←</kbd><kbd>→</kbd> 调整车速</span>
+        <span class="keyboard-shortcut shortcut-divider" aria-hidden="true">·</span>
+        <span id="canvas-help">点击画面<span class="keyboard-shortcut">或按 <kbd>空格</kbd></span>跳跃</span>
+        <span class="keyboard-shortcut shortcut-divider" aria-hidden="true">·</span>
+        <span class="keyboard-shortcut"><kbd>P</kbd> 暂停</span>
       </p>
       <p id="status" class="visually-hidden" role="status"></p>
       <noscript><p class="notice">请启用 JavaScript 开始骑行。</p></noscript>

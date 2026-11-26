@@ -1,16 +1,21 @@
 export const PLAYER_X = 108
 export const GROUND_Y = 214
+export const WHEEL_AXLE_OFFSET = 17
+export const WHEEL_RADIUS = 12
 
 const PIXELS_PER_METER = 10
 const FIRST_SEGMENT = 360
 const LOOKAHEAD = 520
 const MAX_FRAME = 0.05
 const STEP = 1 / 120
-const GRAVITY = 580
-const JUMP_SPEED = 237
+const GRAVITY = 250
+const JUMP_SPEED = 156
 const COAST_SPEED = 96
 const BRAKE_SPEED = 68
 const ACCELERATION = 180
+const CASTLE_HALF_WIDTH = 5
+const CASTLE_TOP = 12
+const TIRE_HIT_RADIUS = 8
 
 const fish = (x, height = 38) => ({ kind: 'fish', x, height })
 const castle = (x) => ({ kind: 'castle', x, height: 0 })
@@ -70,6 +75,20 @@ function extendRoute(state) {
   }
 }
 
+function wheelHitsCastle(wheelGap, verticalGap) {
+  const horizontalGap = Math.max(0, Math.abs(wheelGap) - CASTLE_HALF_WIDTH)
+  return horizontalGap ** 2 + verticalGap ** 2 < TIRE_HIT_RADIUS ** 2
+}
+
+function hitsCastle(gap, y) {
+  // Inset the tire and sandcastle hit areas so grazing their pixel outlines is safe.
+  const verticalGap = Math.max(0, y + WHEEL_RADIUS - CASTLE_TOP)
+  return (
+    wheelHitsCastle(gap - WHEEL_AXLE_OFFSET, verticalGap) ||
+    wheelHitsCastle(gap + WHEEL_AXLE_OFFSET, verticalGap)
+  )
+}
+
 function step(state, dt, input) {
   const cruise = COAST_SPEED + Math.min(38, state.distance / 145)
   const target = input.brake ? BRAKE_SPEED : input.boost ? cruise + 52 : cruise
@@ -90,7 +109,7 @@ function step(state, dt, input) {
     if (gap < -PLAYER_X - 15) {
       return false
     }
-    if (object.kind === 'castle' && gap >= -13 && gap <= 21 && state.y < 16) {
+    if (object.kind === 'castle' && hitsCastle(gap, state.y)) {
       state.status = 'over'
       state.best = Math.max(state.best, meters(state.distance))
     }

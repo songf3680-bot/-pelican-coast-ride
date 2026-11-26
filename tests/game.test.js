@@ -133,15 +133,34 @@ test('the opening route introduces ground fish before the first jump and its hig
   assert.ok(state.distance > firstCastle.x)
 })
 
-test('braking still lets the rider clear the first sandcastle', () => {
-  let state = start(createGame())
-  const firstCastle = state.objects.find(({ kind }) => kind === 'castle')
+for (const takeoffGap of [31, 44]) {
+  test(`a low-speed jump from ${takeoffGap}px clears the sandcastle and lands safely`, () => {
+    let state = start(createGame())
+    const firstCastle = state.objects.find(({ kind }) => kind === 'castle')
+    const input = { brake: true }
+    while (state.status === 'running' && state.distance < firstCastle.x - takeoffGap) {
+      state = update(state, frame, input)
+    }
+    assert.equal(state.status, 'running')
+    state = advance(update(state, frame, { ...input, jump: true }), 0.9, input)
+    assert.equal(state.status, 'running')
+    assert.ok(state.y > 0, 'the rider is still airborne late in the jump')
+    state = advance(state, 0.5, input)
+    assert.equal(state.status, 'running')
+    assert.equal(state.y, 0)
+    assert.ok(state.distance > firstCastle.x + 33)
+  })
+}
+
+test('the rear wheel collides only if it lands before clearing the sandcastle', () => {
+  const castle = { x: 264, kind: 'castle', height: 0 }
+  const descending = ride({ objects: [castle], speed: 68, y: 4, velocityY: -120 })
   const input = { brake: true }
-  while (state.status === 'running' && state.distance < firstCastle.x - 31) {
-    state = update(state, frame, input)
-  }
-  assert.equal(state.status, 'running')
-  state = advance(update(state, frame, { ...input, jump: true }), 0.9, input)
-  assert.equal(state.status, 'running')
-  assert.ok(state.distance > firstCastle.x)
+
+  const overlap = advance({ ...descending, distance: castle.x + 17 }, 0.08, input)
+  assert.equal(overlap.status, 'over')
+
+  const clear = advance({ ...descending, distance: castle.x + 29 }, 0.08, input)
+  assert.equal(clear.status, 'running')
+  assert.equal(clear.y, 0)
 })

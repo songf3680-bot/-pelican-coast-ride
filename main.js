@@ -76,6 +76,7 @@ function showStatus() {
   const running = state.status === 'running'
   const paused = state.status === 'paused'
   overlay.hidden = running
+  canvas.classList.toggle('can-jump', running)
   pause.disabled = state.status === 'ready' || state.status === 'over'
   pause.setAttribute('aria-label', paused ? '继续骑行' : '暂停骑行')
   pause.setAttribute('aria-pressed', String(paused))
@@ -90,7 +91,7 @@ function showStatus() {
   }
 
   const copy = {
-    ready: ['沿着海岸骑一程', '骑上单车，收集小鱼，跃过沙堡。', '开始骑行'],
+    ready: ['沿海骑一程', '点击画面跳过沙堡，沿途收集小鱼。', '开始骑行'],
     paused: ['骑行暂停', '准备好后，接着沿海往前骑。', '继续骑行'],
     over: [
       '撞到沙堡了！',
@@ -158,6 +159,11 @@ function isHeld(action) {
 
 primary.addEventListener('click', mainAction)
 pause.addEventListener('click', pauseAction)
+canvas.addEventListener('pointerdown', (event) => {
+  if (event.button === 0 && state.status === 'running') {
+    jumpRequested = true
+  }
+})
 
 window.addEventListener('keydown', (event) => {
   if (event.ctrlKey || event.altKey || event.metaKey) {
