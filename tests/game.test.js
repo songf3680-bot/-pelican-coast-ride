@@ -5,7 +5,7 @@ import { createGame, start, togglePause, update } from '../game.js'
 const frame = 1 / 60
 
 function ride(overrides = {}) {
-  return { ...start(createGame()), objects: [], nextSegment: 1000, ...overrides }
+  return { ...start(createGame()), objects: [], nextSegment: Number.POSITIVE_INFINITY, ...overrides }
 }
 
 function advance(state, seconds, input) {
@@ -55,6 +55,22 @@ test('a jump rises, ignores a second airborne impulse, and returns to the ground
   assert.equal(landed.velocityY, 0)
   assert.ok(update(landed, frame, { jump: true }).y > 0)
 })
+
+for (const [control, input] of [['braking', { brake: true }], ['coasting', {}]]) {
+  test(`a jump covers at least 155px before its first landing while ${control}`, () => {
+    const takeoff = advance(ride(), 0.6, input)
+    const step = frame / 2
+    let airborne = update(takeoff, step, { ...input, jump: true })
+    assert.ok(airborne.y > 0)
+    while (airborne.status === 'running' && airborne.y > 0 && airborne.time - takeoff.time < 2) {
+      airborne = update(airborne, step, input)
+    }
+    assert.equal(airborne.status, 'running')
+    assert.equal(airborne.y, 0)
+    const travel = airborne.distance - takeoff.distance
+    assert.ok(travel >= 155, `jump covered only ${travel.toFixed(1)}px`)
+  })
+}
 
 test('a collected fish only adds one point and leaves the next frame collectible-free', () => {
   const fish = Object.freeze({ x: 32, kind: 'fish', height: 38 })
@@ -133,7 +149,7 @@ test('the opening route introduces ground fish before the first jump and its hig
   assert.ok(state.distance > firstCastle.x)
 })
 
-for (const takeoffGap of [31, 44]) {
+for (const takeoffGap of [31, 44, 100]) {
   test(`a low-speed jump from ${takeoffGap}px clears the sandcastle and lands safely`, () => {
     let state = start(createGame())
     const firstCastle = state.objects.find(({ kind }) => kind === 'castle')
@@ -151,6 +167,23 @@ for (const takeoffGap of [31, 44]) {
     assert.ok(state.distance > firstCastle.x + 33)
   })
 }
+
+test('boosting leaves time to land and jump again between closely spaced sandcastles', () => {
+  const finish = 7200
+  let state = start(createGame())
+  let fullSpeedJumps = 0
+  for (let elapsed = 0; elapsed < 50 && state.distance < finish; elapsed += frame) {
+    const castle = state.objects.find(({ kind, x }) => kind === 'castle' && x > state.distance)
+    const jump = state.y === 0 && !!castle && castle.x - state.distance <= 40
+    if (jump && state.speed >= 185) {
+      fullSpeedJumps += 1
+    }
+    state = update(state, frame, { boost: true, jump })
+    assert.equal(state.status, 'running', `crashed at ${state.distance.toFixed(1)}px`)
+  }
+  assert.ok(state.distance >= finish)
+  assert.ok(fullSpeedJumps >= 2)
+})
 
 test('the rear wheel collides only if it lands before clearing the sandcastle', () => {
   const castle = { x: 264, kind: 'castle', height: 0 }

@@ -5,11 +5,17 @@ export const WHEEL_RADIUS = 12
 
 const PIXELS_PER_METER = 10
 const FIRST_SEGMENT = 360
+const SEGMENT_LENGTH = 400
 const LOOKAHEAD = 520
 const MAX_FRAME = 0.05
 const STEP = 1 / 120
-const GRAVITY = 250
-const JUMP_SPEED = 156
+const GRAVITY = 320
+const JUMP_SPEED = 176
+const JUMP_DURATION = (2 * JUMP_SPEED) / GRAVITY
+const MIN_AIR_SPEED = 174
+const AIR_SPEED_SCALE = 1.25
+const TAKEOFF_RAMP = 0.14
+const LANDING_RAMP = 0.16
 const COAST_SPEED = 96
 const BRAKE_SPEED = 68
 const ACCELERATION = 180
@@ -21,10 +27,10 @@ const fish = (x, height = 38) => ({ kind: 'fish', x, height })
 const castle = (x) => ({ kind: 'castle', x, height: 0 })
 
 const routes = [
-  (x) => [fish(x), castle(x + 114), fish(x + 118, 73), fish(x + 219)],
-  (x) => [fish(x + 14), fish(x + 48), castle(x + 154), fish(x + 152, 73)],
-  (x) => [castle(x + 18), fish(x + 22, 72), fish(x + 140), castle(x + 250)],
-  (x) => [fish(x + 28), castle(x + 133), fish(x + 132, 73), fish(x + 248)]
+  (x) => [fish(x), castle(x + 160), fish(x + 164, 73), fish(x + 258)],
+  (x) => [fish(x + 14), fish(x + 48), fish(x + 163, 73), castle(x + 165)],
+  (x) => [castle(x + 76), fish(x + 80, 72), fish(x + 224), castle(x + 376)],
+  (x) => [fish(x + 28), fish(x + 156), fish(x + 274, 73), castle(x + 276)]
 ]
 
 export function meters(distance) {
@@ -69,9 +75,9 @@ export function togglePause(state) {
 
 function extendRoute(state) {
   if (state.nextSegment < state.distance + LOOKAHEAD) {
-    const index = (state.nextSegment - FIRST_SEGMENT) / 320
+    const index = (state.nextSegment - FIRST_SEGMENT) / SEGMENT_LENGTH
     state.objects = state.objects.concat(routes[index % routes.length](state.nextSegment))
-    state.nextSegment += 320
+    state.nextSegment += SEGMENT_LENGTH
   }
 }
 
@@ -89,12 +95,26 @@ function hitsCastle(gap, y) {
   )
 }
 
+function travelSpeed(state) {
+  if (state.y === 0 && state.velocityY <= 0) {
+    return state.speed
+  }
+  // Use the vertical arc as a clock so the forward boost ends at touchdown.
+  const airtime = (JUMP_SPEED - state.velocityY) / GRAVITY
+  const ramp = Math.max(
+    0,
+    Math.min(1, airtime / TAKEOFF_RAMP, (JUMP_DURATION - airtime) / LANDING_RAMP)
+  )
+  const airSpeed = Math.max(MIN_AIR_SPEED, state.speed * AIR_SPEED_SCALE)
+  return state.speed + (airSpeed - state.speed) * ramp
+}
+
 function step(state, dt, input) {
   const cruise = COAST_SPEED + Math.min(38, state.distance / 145)
   const target = input.brake ? BRAKE_SPEED : input.boost ? cruise + 52 : cruise
   const change = target - state.speed
   state.speed += Math.sign(change) * Math.min(Math.abs(change), ACCELERATION * dt)
-  state.distance += state.speed * dt
+  state.distance += travelSpeed(state) * dt
   state.time += dt
 
   state.y += state.velocityY * dt - (GRAVITY * dt * dt) / 2
