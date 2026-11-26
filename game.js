@@ -9,13 +9,11 @@ const SEGMENT_LENGTH = 400
 const LOOKAHEAD = 520
 const MAX_FRAME = 0.05
 const STEP = 1 / 120
-const GRAVITY = 320
-const JUMP_SPEED = 176
-const JUMP_DURATION = (2 * JUMP_SPEED) / GRAVITY
-const MIN_AIR_SPEED = 174
-const AIR_SPEED_SCALE = 1.25
-const TAKEOFF_RAMP = 0.14
-const LANDING_RAMP = 0.16
+const MIN_JUMP_DISTANCE = 180
+const MIN_JUMP_TIME = 1.34
+const JUMP_HEIGHT = 48
+const JUMP_EDGE_HEIGHT = 10
+const JUMP_EDGE_DISTANCE = 10
 const COAST_SPEED = 96
 const BRAKE_SPEED = 68
 const ACCELERATION = 180
@@ -44,7 +42,7 @@ export function createGame(best = 0) {
     distance: 0,
     speed: COAST_SPEED,
     y: 0,
-    velocityY: 0,
+    jumpStart: null,
     time: 0,
     score: 0,
     best: record,
@@ -95,33 +93,38 @@ function hitsCastle(gap, y) {
   )
 }
 
-function travelSpeed(state) {
-  if (state.y === 0 && state.velocityY <= 0) {
-    return state.speed
-  }
-  // Use the vertical arc as a clock so the forward boost ends at touchdown.
-  const airtime = (JUMP_SPEED - state.velocityY) / GRAVITY
-  const ramp = Math.max(
-    0,
-    Math.min(1, airtime / TAKEOFF_RAMP, (JUMP_DURATION - airtime) / LANDING_RAMP)
-  )
-  const airSpeed = Math.max(MIN_AIR_SPEED, state.speed * AIR_SPEED_SCALE)
-  return state.speed + (airSpeed - state.speed) * ramp
-}
-
-function step(state, dt, input) {
+function adjustGroundSpeed(state, dt, input) {
   const cruise = COAST_SPEED + Math.min(38, state.distance / 145)
   const target = input.brake ? BRAKE_SPEED : input.boost ? cruise + 52 : cruise
   const change = target - state.speed
   state.speed += Math.sign(change) * Math.min(Math.abs(change), ACCELERATION * dt)
-  state.distance += travelSpeed(state) * dt
-  state.time += dt
+}
 
-  state.y += state.velocityY * dt - (GRAVITY * dt * dt) / 2
-  state.velocityY -= GRAVITY * dt
-  if (state.y <= 0) {
+function updateJumpHeight(state) {
+  const length = Math.max(MIN_JUMP_DISTANCE, state.speed * MIN_JUMP_TIME)
+  const travelled = state.distance - state.jumpStart
+  if (travelled >= length) {
     state.y = 0
-    state.velocityY = 0
+    state.jumpStart = null
+    return
+  }
+
+  // Rise briskly off the ground so a late jump can still clear the obstacle.
+  const progress = travelled / length
+  const edge = Math.min(1, travelled / JUMP_EDGE_DISTANCE, (length - travelled) / JUMP_EDGE_DISTANCE)
+  const arch = 4 * (JUMP_HEIGHT - JUMP_EDGE_HEIGHT) * progress * (1 - progress)
+  state.y = arch + JUMP_EDGE_HEIGHT * edge * (2 - edge)
+}
+
+function step(state, dt, input) {
+  const airborne = state.jumpStart !== null
+  if (!airborne) {
+    adjustGroundSpeed(state, dt, input)
+  }
+  state.distance += state.speed * dt
+  state.time += dt
+  if (airborne) {
+    updateJumpHeight(state)
   }
 
   state.objects = state.objects.filter((object) => {
@@ -150,8 +153,8 @@ export function update(state, deltaSeconds, input = {}) {
     return state
   }
   const next = { ...state }
-  if (input.jump && next.y === 0) {
-    next.velocityY = JUMP_SPEED
+  if (input.jump && next.jumpStart === null) {
+    next.jumpStart = next.distance
   }
   extendRoute(next)
   let remaining = Math.min(deltaSeconds, MAX_FRAME)

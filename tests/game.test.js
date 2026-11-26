@@ -3,6 +3,8 @@ import test from 'node:test'
 import { createGame, start, togglePause, update } from '../game.js'
 
 const frame = 1 / 60
+const physicsStep = frame / 2
+const landingTimeout = 3.2
 
 function ride(overrides = {}) {
   return { ...start(createGame()), objects: [], nextSegment: Number.POSITIVE_INFINITY, ...overrides }
@@ -11,6 +13,14 @@ function ride(overrides = {}) {
 function advance(state, seconds, input) {
   for (let elapsed = 0; elapsed < seconds && state.status === 'running'; elapsed += frame) {
     state = update(state, frame, input)
+  }
+  return state
+}
+
+function advanceToLanding(state, input) {
+  const deadline = state.time + landingTimeout
+  while (state.status === 'running' && state.y > 0 && state.time < deadline) {
+    state = update(state, physicsStep, input)
   }
   return state
 }
@@ -52,23 +62,47 @@ test('a jump rises, ignores a second airborne impulse, and returns to the ground
   assert.deepEqual(update(rising, frame, { jump: true }), update(rising, frame))
   const landed = advance(rising, 2)
   assert.equal(landed.y, 0)
-  assert.equal(landed.velocityY, 0)
+  assert.equal(landed.jumpStart, null)
   assert.ok(update(landed, frame, { jump: true }).y > 0)
 })
 
-for (const [control, input] of [['braking', { brake: true }], ['coasting', {}]]) {
-  test(`a jump covers at least 155px before its first landing while ${control}`, () => {
-    const takeoff = advance(ride(), 0.6, input)
-    const step = frame / 2
-    let airborne = update(takeoff, step, { ...input, jump: true })
-    assert.ok(airborne.y > 0)
-    while (airborne.status === 'running' && airborne.y > 0 && airborne.time - takeoff.time < 2) {
-      airborne = update(airborne, step, input)
+test('a jump holds its takeoff speed through midair control changes until touchdown', () => {
+  const takeoff = ride()
+  let airborne = update(takeoff, physicsStep, { jump: true, boost: true })
+  assert.ok(airborne.y > 0)
+  assert.equal(airborne.speed, takeoff.speed)
+  assert.ok(Math.abs(airborne.distance - takeoff.distance - takeoff.speed * physicsStep) < 1e-8)
+
+  for (let step = 0; step * physicsStep < landingTimeout && airborne.y > 0; step += 1) {
+    const input = step % 2 === 0 ? { boost: true } : { brake: true }
+    const next = update(airborne, physicsStep, input)
+    if (next.y > 0) {
+      assert.equal(next.speed, takeoff.speed)
+      const travel = next.distance - airborne.distance
+      assert.ok(Math.abs(travel - takeoff.speed * physicsStep) < 1e-8)
     }
-    assert.equal(airborne.status, 'running')
-    assert.equal(airborne.y, 0)
-    const travel = airborne.distance - takeoff.distance
-    assert.ok(travel >= 155, `jump covered only ${travel.toFixed(1)}px`)
+    airborne = next
+  }
+  assert.equal(airborne.status, 'running')
+  assert.equal(airborne.y, 0)
+  assert.ok(update(airborne, frame, { boost: true }).speed > airborne.speed)
+  assert.ok(update(airborne, frame, { brake: true }).speed < airborne.speed)
+})
+
+for (const [control, input, minTravel, initialDistance] of [
+  ['braking', { brake: true }, 155, 0],
+  ['coasting', {}, 155, 0],
+  ['at full boost', { boost: true }, 235, 6000]
+]) {
+  test(`a jump covers at least ${minTravel}px before landing while ${control}`, () => {
+    const takeoff = advance(ride({ distance: initialDistance }), 0.6, input)
+    const airborne = update(takeoff, physicsStep, { ...input, jump: true })
+    assert.ok(airborne.y > 0)
+    const landed = advanceToLanding(airborne, input)
+    assert.equal(landed.status, 'running')
+    assert.equal(landed.y, 0)
+    const travel = landed.distance - takeoff.distance
+    assert.ok(travel >= minTravel, `jump covered only ${travel.toFixed(1)}px`)
   })
 }
 
@@ -161,7 +195,7 @@ for (const takeoffGap of [31, 44, 100]) {
     state = advance(update(state, frame, { ...input, jump: true }), 0.9, input)
     assert.equal(state.status, 'running')
     assert.ok(state.y > 0, 'the rider is still airborne late in the jump')
-    state = advance(state, 0.5, input)
+    state = advanceToLanding(state, input)
     assert.equal(state.status, 'running')
     assert.equal(state.y, 0)
     assert.ok(state.distance > firstCastle.x + 33)
@@ -187,13 +221,18 @@ test('boosting leaves time to land and jump again between closely spaced sandcas
 
 test('the rear wheel collides only if it lands before clearing the sandcastle', () => {
   const castle = { x: 264, kind: 'castle', height: 0 }
-  const descending = ride({ objects: [castle], speed: 68, y: 4, velocityY: -120 })
   const input = { brake: true }
+  const jumpFrom = (gap) => {
+    const takeoff = ride({ objects: [castle], speed: 68, distance: castle.x - gap })
+    return advanceToLanding(update(takeoff, physicsStep, { ...input, jump: true }), input)
+  }
 
-  const overlap = advance({ ...descending, distance: castle.x + 17 }, 0.08, input)
+  const overlap = jumpFrom(165)
   assert.equal(overlap.status, 'over')
+  assert.ok(overlap.distance > castle.x)
 
-  const clear = advance({ ...descending, distance: castle.x + 29 }, 0.08, input)
+  const clear = jumpFrom(147)
   assert.equal(clear.status, 'running')
   assert.equal(clear.y, 0)
+  assert.ok(clear.distance > castle.x + 30)
 })
