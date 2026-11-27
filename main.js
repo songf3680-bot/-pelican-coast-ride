@@ -1,4 +1,4 @@
-import { createGame, meters, start, togglePause, update } from './game.js'
+import { changeSpeed, createGame, meters, start, togglePause, update } from './game.js'
 import { render } from './render.js'
 
 const byId = (id) => document.getElementById(id)
@@ -30,8 +30,6 @@ const keys = new Map([
   ['Space', 'jump'],
   ['KeyW', 'jump']
 ])
-const heldKeys = new Set()
-const pointers = new Map()
 let jumpRequested = false
 let previousFrame = null
 let state = createGame(loadBest())
@@ -64,12 +62,6 @@ function draw() {
   showText(distance, meters(state.distance))
   showText(score, state.score)
   showText(best, state.best)
-}
-
-function resetInput() {
-  heldKeys.clear()
-  pointers.clear()
-  jumpRequested = false
 }
 
 function showStatus() {
@@ -114,7 +106,7 @@ function transition(next, moveFocus = true) {
   }
   state = next
   previousFrame = null
-  resetInput()
+  jumpRequested = false
   showStatus()
   draw()
   if (!moveFocus) {
@@ -138,30 +130,23 @@ function pauseAction() {
 function pauseForInactivity() {
   if (state.status === 'running') {
     transition(togglePause(state), false)
-  } else {
-    resetInput()
   }
 }
 
-function isHeld(action) {
-  for (const key of heldKeys) {
-    if (keys.get(key) === action) {
-      return true
-    }
+function rideAction(action) {
+  if (state.status !== 'running' || jumpRequested) return
+  if (action === 'jump') {
+    jumpRequested = state.jumpStart === null
+  } else {
+    state = changeSpeed(state, action === 'boost' ? 1 : -1)
   }
-  for (const pointerAction of pointers.values()) {
-    if (pointerAction === action) {
-      return true
-    }
-  }
-  return false
 }
 
 primary.addEventListener('click', mainAction)
 pause.addEventListener('click', pauseAction)
 canvas.addEventListener('pointerdown', (event) => {
-  if (event.button === 0 && state.status === 'running') {
-    jumpRequested = true
+  if (event.button === 0) {
+    rideAction('jump')
   }
 })
 
@@ -180,16 +165,12 @@ window.addEventListener('keydown', (event) => {
   if (!action || state.status !== 'running') {
     return
   }
-  if (event.code === 'Space' && (event.target === pause || event.target === controls.jump)) {
+  if (event.code === 'Space' && event.target === pause) {
     return
   }
   event.preventDefault()
-  if (action === 'jump' && !event.repeat && !heldKeys.has(event.code)) {
-    jumpRequested = true
-  }
-  heldKeys.add(event.code)
+  if (!event.repeat) rideAction(action)
 })
-window.addEventListener('keyup', (event) => heldKeys.delete(event.code))
 window.addEventListener('blur', pauseForInactivity)
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -199,52 +180,27 @@ document.addEventListener('visibilitychange', () => {
 
 for (const [action, control] of Object.entries(controls)) {
   control.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0 || state.status !== 'running') {
-      return
-    }
-    control.setPointerCapture(event.pointerId)
-    pointers.set(event.pointerId, action)
-    if (action === 'jump') {
-      jumpRequested = true
+    if (event.button === 0 && state.status === 'running') {
+      event.preventDefault()
+      canvas.focus({ preventScroll: true })
+      rideAction(action)
     }
   })
-  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-    control.addEventListener(event, ({ pointerId }) => pointers.delete(pointerId))
-  }
-  if (action === 'jump') {
-    control.addEventListener('click', (event) => {
-      if (event.detail === 0 && state.status === 'running') {
-        jumpRequested = true
-      }
-    })
-  } else {
-    for (const code of ['Space', 'Enter']) {
-      const virtualId = action + code
-      control.addEventListener('keydown', (event) => {
-        if (event.code !== code || state.status !== 'running') {
-          return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-        pointers.set(virtualId, action)
-      })
-      control.addEventListener('keyup', (event) => {
-        if (event.code === code) {
-          pointers.delete(virtualId)
-        }
-      })
-      control.addEventListener('blur', () => pointers.delete(virtualId))
+  control.addEventListener('keydown', (event) => {
+    if (event.code === 'Space' || event.code === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!event.repeat) rideAction(action)
     }
-  }
+  })
+  control.addEventListener('click', (event) => {
+    if (event.detail === 0) rideAction(action)
+  })
 }
 
 function frame(now) {
   if (state.status === 'running' && previousFrame !== null) {
-    const next = update(state, (now - previousFrame) / 1000, {
-      boost: isHeld('boost'),
-      brake: isHeld('brake'),
-      jump: jumpRequested
-    })
+    const next = update(state, (now - previousFrame) / 1000, { jump: jumpRequested })
     if (next !== state) {
       jumpRequested = false
     }

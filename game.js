@@ -17,13 +17,12 @@ const MAX_FRAME = 0.05
 const STEP = 1 / 120
 const MIN_JUMP_DISTANCE = 180
 const MIN_JUMP_TIME = 1.05
-const JUMP_APEX = 0.55
 const JUMP_HEIGHT = 48
 const JUMP_EDGE_HEIGHT = 10
 const JUMP_EDGE_DISTANCE = 10
-const COAST_SPEED = 172
-const BRAKE_SPEED = 144
-const ACCELERATION = 180
+const START_SPEED = 172
+const MIN_SPEED = 144
+const MAX_SPEED = 236
 const CASTLE_HALF_WIDTH = 5
 const CASTLE_TOP = 12
 const TIRE_HIT_RADIUS = 8
@@ -47,7 +46,7 @@ export function createGame(best = 0) {
   return {
     status: 'ready',
     distance: 0,
-    speed: COAST_SPEED,
+    speed: START_SPEED,
     y: 0,
     jumpStart: null,
     time: 0,
@@ -125,11 +124,12 @@ function collectsFish(fish, gap, state) {
   return (tailDx / WHEEL_RADIUS) ** 2 + (tailDy / WHEEL_RADIUS_Y) ** 2 <= 1
 }
 
-function adjustGroundSpeed(state, dt, input) {
-  const cruise = COAST_SPEED + Math.min(20, state.distance / 145)
-  const target = input.brake ? BRAKE_SPEED : input.boost ? cruise + 44 : cruise
-  const change = target - state.speed
-  state.speed += Math.sign(change) * Math.min(Math.abs(change), ACCELERATION * dt)
+export function changeSpeed(state, direction) {
+  if (state.status !== 'running' || state.jumpStart !== null || (direction !== 1 && direction !== -1)) {
+    return state
+  }
+  const speed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, state.speed + direction * PIXELS_PER_METER))
+  return speed === state.speed ? state : { ...state, speed }
 }
 
 function updateJumpHeight(state) {
@@ -144,21 +144,16 @@ function updateJumpHeight(state) {
   // Rise briskly off the ground so a late jump can still clear the obstacle.
   const progress = travelled / length
   const edge = Math.min(1, travelled / JUMP_EDGE_DISTANCE, (length - travelled) / JUMP_EDGE_DISTANCE)
-  // A narrow, rounded crest keeps the bike moving through the top pixel rows.
-  const half = progress < JUMP_APEX ? JUMP_APEX : 1 - JUMP_APEX
-  const fromPeak = Math.abs(progress - JUMP_APEX) / half
-  const arch = (JUMP_HEIGHT - JUMP_EDGE_HEIGHT) * (1 - fromPeak ** 1.25)
+  // Round the turn at halfway, with little time spent in the top pixel rows.
+  const fromPeak = Math.abs(2 * progress - 1)
+  const arch = (JUMP_HEIGHT - JUMP_EDGE_HEIGHT) * (1 - fromPeak ** 1.05)
   state.y = arch + JUMP_EDGE_HEIGHT * edge * (2 - edge)
 }
 
-function step(state, dt, input) {
-  const airborne = state.jumpStart !== null
-  if (!airborne) {
-    adjustGroundSpeed(state, dt, input)
-  }
+function step(state, dt) {
   state.distance += state.speed * dt
   state.time += dt
-  if (airborne) {
+  if (state.jumpStart !== null) {
     updateJumpHeight(state)
   }
 
@@ -191,7 +186,7 @@ export function update(state, deltaSeconds, input = {}) {
   let remaining = Math.min(deltaSeconds, MAX_FRAME)
   while (remaining > 0 && next.status === 'running') {
     const dt = Math.min(remaining, STEP)
-    step(next, dt, input)
+    step(next, dt)
     remaining -= dt
   }
   return next
