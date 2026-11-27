@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { changeSpeed, createGame, start, togglePause, update } from '../game.js'
+import { brake, createGame, start, togglePause, update } from '../game.js'
 
 const frame = 1 / 60
 const physicsStep = frame / 2
@@ -8,13 +8,6 @@ const landingTimeout = 3.2
 
 function ride(overrides = {}) {
   return { ...start(createGame()), objects: [], nextSegment: Number.POSITIVE_INFINITY, ...overrides }
-}
-
-function tapSpeed(state, taps) {
-  for (let i = 0; i < Math.abs(taps); i++) {
-    state = changeSpeed(state, Math.sign(taps))
-  }
-  return state
 }
 
 function advance(state, seconds, input) {
@@ -36,55 +29,47 @@ test('a ride advances only after starting and does not drift while paused', () =
   const ready = createGame(12)
   assert.equal(ready.status, 'ready')
   assert.equal(ready.best, 12)
-  assert.equal(changeSpeed(ready, 1), ready)
+  assert.equal(brake(ready), ready)
   assert.deepEqual(update(ready, frame, { jump: true }), ready)
 
-  const running = advance(changeSpeed(start(ready), 1), 0.3)
+  const running = advance(start(ready), 0.3, { boost: true })
   assert.equal(running.status, 'running')
   assert.ok(running.distance > 0)
   const paused = togglePause(running)
   assert.equal(paused.status, 'paused')
-  assert.equal(changeSpeed(paused, -1), paused)
+  assert.equal(brake(paused), paused)
   assert.deepEqual(update(paused, 1, { jump: true }), paused)
   const resumed = advance(togglePause(paused), 0.3)
   assert.equal(resumed.status, 'running')
   assert.ok(resumed.distance > running.distance)
-  assert.equal(resumed.speed, 202)
+  assert.equal(resumed.speed, 170)
   assert.equal(resumed.best, 12)
 })
 
-test('each ground tap changes speed by one step and riding preserves the selected speed', () => {
-  const initial = ride()
-  const faster = changeSpeed(initial, 1)
-  const twice = changeSpeed(faster, 1)
-  const fastest = changeSpeed(twice, 1)
-  const slower = changeSpeed(twice, -1)
-  assert.deepEqual([initial.speed, faster.speed, twice.speed, fastest.speed], [172, 202, 232, 236])
-  assert.equal(slower.speed, 202)
-  for (const selected of [initial, twice, changeSpeed(initial, -1)]) {
-    const cruising = advance(selected, 3)
-    assert.equal(cruising.speed, selected.speed)
-    assert.ok(Math.abs(cruising.distance - selected.speed * cruising.time) < 1e-8)
-  }
-})
-
-test('repeated taps stop at each speed limit and a reverse tap takes effect immediately', () => {
-  const fastest = tapSpeed(ride(), 4)
-  const slowest = tapSpeed(ride(), -2)
-  assert.equal(fastest.speed, 236)
+test('a brake tap reduces ground speed down to the minimum and keeps the lower speed', () => {
+  const fastest = advance(ride(), 0.8, { boost: true })
+  assert.equal(brake(fastest, true).speed, 206)
+  const slowest = brake(fastest)
   assert.equal(slowest.speed, 144)
-  assert.equal(changeSpeed(fastest, -1).speed, 206)
-  assert.equal(changeSpeed(slowest, 1).speed, 174)
+  assert.equal(brake(slowest).speed, 144)
+  assert.equal(advance(slowest, 0.5).speed, 144)
 })
 
-test('holding boost accelerates over time and releasing it preserves the attained speed', () => {
+test('holding boost accelerates over time and releasing it restores 17 m/s', () => {
   const initial = ride()
   const shortHold = advance(initial, 0.2, { boost: true })
   const longerHold = advance(initial, 0.4, { boost: true })
   assert.ok(shortHold.speed > initial.speed)
   assert.ok(longerHold.speed > shortHold.speed && longerHold.speed < 236)
-  assert.equal(advance(shortHold, 0.5).speed, shortHold.speed)
-  assert.equal(advance(longerHold, 0.4, { boost: true }).speed, 236)
+  const fastest = advance(longerHold, 0.4, { boost: true })
+  assert.equal(fastest.speed, 236)
+  for (const boosted of [shortHold, fastest]) {
+    const released = update(boosted, physicsStep)
+    assert.equal(released.speed, 170)
+    assert.ok(Math.abs(released.distance - boosted.distance - 170 * physicsStep) < 1e-8)
+    assert.equal(advance(released, 0.5).speed, 170)
+    assert.equal(update(boosted, physicsStep, { jump: true }).speed, 170)
+  }
 })
 
 test('a jump rises, ignores a second airborne impulse, and returns to the ground', () => {
@@ -97,35 +82,34 @@ test('a jump rises, ignores a second airborne impulse, and returns to the ground
   assert.ok(update(landed, frame, { jump: true }).y > 0)
 })
 
-test('a jump holds its takeoff speed through midair control changes until touchdown', () => {
-  const takeoff = changeSpeed(ride(), 1)
-  let airborne = update(takeoff, physicsStep, { jump: true })
+test('releasing boost during a jump keeps takeoff speed until touchdown', () => {
+  const takeoff = advance(ride(), 0.25, { boost: true })
+  let airborne = update(takeoff, physicsStep, { jump: true, boost: true })
   assert.ok(airborne.y > 0)
   assert.equal(airborne.speed, takeoff.speed)
   assert.ok(Math.abs(airborne.distance - takeoff.distance - takeoff.speed * physicsStep) < 1e-8)
 
   for (let step = 0; step * physicsStep < landingTimeout && airborne.y > 0; step += 1) {
-    const tapped = changeSpeed(airborne, step % 2 === 0 ? 1 : -1)
-    const next = update(tapped, physicsStep, { boost: true })
-    assert.equal(next.speed, takeoff.speed)
+    assert.equal(brake(airborne), airborne)
+    const next = update(airborne, physicsStep)
+    assert.equal(next.speed, next.y > 0 ? takeoff.speed : 170)
     const travel = next.distance - airborne.distance
     assert.ok(Math.abs(travel - takeoff.speed * physicsStep) < 1e-8)
     airborne = next
   }
   assert.equal(airborne.status, 'running')
   assert.equal(airborne.y, 0)
-  assert.equal(advance(airborne, 0.5).speed, takeoff.speed)
-  assert.equal(changeSpeed(airborne, 1).speed, takeoff.speed + 30)
-  assert.equal(changeSpeed(airborne, -1).speed, takeoff.speed - 30)
+  assert.equal(advance(airborne, 0.5).speed, 170)
+  assert.equal(brake(airborne).speed, 144)
 })
 
-for (const [speed, taps, expectedAirtime, expectedRange] of [
-  ['minimum', -1, 1.25, 180],
-  ['starting', 0, 1.05, 181],
-  ['maximum', 3, 1.05, 248]
+for (const [label, speed, expectedAirtime, expectedRange] of [
+  ['minimum', 144, 1.25, 180],
+  ['starting', 170, 180 / 170, 180],
+  ['maximum', 236, 1.05, 248]
 ]) {
-  test(`a jump keeps its flight time and horizontal range at ${speed} speed`, () => {
-    const takeoff = tapSpeed(ride(), taps)
+  test(`a jump keeps its flight time and horizontal range at ${label} speed`, () => {
+    const takeoff = ride({ speed })
     const airborne = update(takeoff, physicsStep, { jump: true })
     assert.ok(airborne.y > 0)
     const landed = advanceToLanding(airborne)
@@ -138,9 +122,9 @@ for (const [speed, taps, expectedAirtime, expectedRange] of [
   })
 }
 
-for (const [speed, taps, maxNearPeak] of [['starting', 0, 0.105], ['minimum', -1, 0.12]]) {
-  test(`at ${speed} speed the bike crests halfway through the jump and promptly drops`, () => {
-    const takeoff = tapSpeed(ride(), taps)
+for (const [label, speed, maxNearPeak] of [['starting', 170, 0.105], ['minimum', 144, 0.12]]) {
+  test(`at ${label} speed the bike crests halfway through the jump and promptly drops`, () => {
+    const takeoff = ride({ speed })
     let state = update(takeoff, physicsStep, { jump: true })
     let peakHeight = 0
     let peakTime = 0
@@ -163,8 +147,8 @@ for (const [speed, taps, maxNearPeak] of [['starting', 0, 0.105], ['minimum', -1
 }
 
 test('the crest changes direction gradually and no descending frame drops the bike abruptly', () => {
-  for (const taps of [-1, 0, 3]) {
-    let state = tapSpeed(ride(), taps)
+  for (const speed of [144, 170, 236]) {
+    let state = ride({ speed })
     let previousRise = 0
     let crestAcceleration = 0
     let largestDrop = 0
@@ -217,10 +201,10 @@ test('a crash saves the longest distance and restarting resets the ride', () => 
     best: previousBest,
     objects: [{ x: distance + 32, kind: 'castle', height: 0 }]
   })
-  const crash = advance(changeSpeed(initial, -1), 0.9)
+  const crash = advance(brake(initial), 0.9)
   assert.equal(crash.status, 'over')
   assert.equal(crash.speed, 144)
-  assert.equal(changeSpeed(crash, 1), crash)
+  assert.equal(brake(crash), crash)
   assert.equal(crash.best, Math.floor(crash.distance / 10))
   assert.ok(crash.best > previousBest)
 
@@ -230,7 +214,7 @@ test('a crash saves the longest distance and restarting resets the ride', () => 
   assert.equal(restarted.distance, 0)
   assert.equal(restarted.score, 0)
   assert.equal(restarted.y, 0)
-  assert.equal(restarted.speed, 172)
+  assert.equal(restarted.speed, 170)
 
   const shorter = advance(
     ride({
@@ -267,7 +251,7 @@ test('the trailing wheel picks up a low fish after clearing the sandcastle', () 
   const fish = { kind: 'fish', x: 714, height: 38 }
   const initial = ride({ distance: castle.x - 35, objects: [castle, fish] })
   const slower = { ...initial, speed: 216 }
-  const faster = tapSpeed(initial, 2)
+  const faster = { ...initial, speed: 232 }
   // At 232px/s the front tire clears the fish by the time the bike is 6px past it.
   for (const [takeoff, checkpoint] of [[slower, fish.x], [faster, fish.x + 6]]) {
     let state = update(takeoff, physicsStep, { jump: true })
@@ -295,7 +279,7 @@ test('both outer tire edges collect touching fish while a separated fish stays p
 
 for (const takeoffGap of [31, 44, 100]) {
   test(`a low-speed jump from ${takeoffGap}px clears the sandcastle and lands safely`, () => {
-    let state = changeSpeed(start(createGame()), -1)
+    let state = brake(start(createGame()))
     const firstCastle = state.objects.find(({ kind }) => kind === 'castle')
     const takeoffDistance = firstCastle.x - takeoffGap
     while (state.status === 'running' && state.distance < takeoffDistance) {
@@ -322,7 +306,7 @@ for (const takeoffGap of [31, 44, 100]) {
 
 test('maximum speed leaves time to land and jump again between closely spaced sandcastles', () => {
   const finish = 7200
-  let state = tapSpeed(start(createGame()), 3)
+  let state = start(createGame())
   let fullSpeedJumps = 0
   for (let elapsed = 0; elapsed < 50 && state.distance < finish; elapsed += frame) {
     const castle = state.objects.find(({ kind, x }) => kind === 'castle' && x > state.distance)
@@ -330,7 +314,7 @@ test('maximum speed leaves time to land and jump again between closely spaced sa
     if (jump && state.speed === 236) {
       fullSpeedJumps += 1
     }
-    state = update(state, frame, { jump })
+    state = update(state, frame, { jump, boost: true })
     assert.equal(state.status, 'running', `crashed at ${state.distance.toFixed(1)}px`)
   }
   assert.ok(state.distance >= finish)
@@ -339,7 +323,7 @@ test('maximum speed leaves time to land and jump again between closely spaced sa
 
 test('the rear wheel collides only if it lands before clearing the sandcastle', () => {
   const castle = { x: 264, kind: 'castle', height: 0 }
-  const braking = changeSpeed(ride({ objects: [castle] }), -1)
+  const braking = brake(ride({ objects: [castle] }))
   const jumpFrom = (gap) => {
     const takeoff = { ...braking, distance: castle.x - gap }
     return advanceToLanding(update(takeoff, physicsStep, { jump: true }))

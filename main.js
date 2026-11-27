@@ -1,5 +1,5 @@
-import { changeSpeed, createGame, meters, PIXELS_PER_METER, start, togglePause, update } from './game.js?v=hold-boost'
-import { render } from './render.js?v=hold-boost'
+import { brake, createGame, meters, PIXELS_PER_METER, start, togglePause, update } from './game.js?v=cruise-17'
+import { render } from './render.js?v=cruise-17'
 
 const byId = (id) => document.getElementById(id)
 const canvas = byId('game')
@@ -143,15 +143,15 @@ function pauseForInactivity() {
 
 function rideAction(action, inputId) {
   if (state.status !== 'running') return
-  if (action === 'boost' && inputId !== undefined) {
-    boostInputs.add(inputId)
+  if (action === 'boost') {
+    if (inputId !== undefined) boostInputs.add(inputId)
     return
   }
   if (jumpRequested) return
   if (action === 'jump') {
     jumpRequested = state.jumpStart === null
   } else {
-    state = changeSpeed(state, action === 'boost' ? 1 : -1)
+    state = brake(state, boostInputs.size > 0)
     showSpeed()
   }
 }

@@ -22,10 +22,10 @@ const JUMP_EDGE_HEIGHT = 10
 const TAKEOFF_EDGE_DISTANCE = 10
 const LANDING_EDGE_DISTANCE = 26
 const CREST_FRACTION = 0.14
-const START_SPEED = 172
+const START_SPEED = 170
 const MIN_SPEED = 144
 const MAX_SPEED = 236
-const SPEED_STEP = 3 * PIXELS_PER_METER
+const BRAKE_STEP = 3 * PIXELS_PER_METER
 const BOOST_ACCELERATION = 12 * PIXELS_PER_METER
 const CASTLE_HALF_WIDTH = 5
 const CASTLE_TOP = 12
@@ -51,6 +51,7 @@ export function createGame(best = 0) {
     status: 'ready',
     distance: 0,
     speed: START_SPEED,
+    boosted: false,
     y: 0,
     jumpStart: null,
     time: 0,
@@ -73,7 +74,9 @@ export function start(state) {
 
 export function togglePause(state) {
   if (state.status === 'running') {
-    return { ...state, status: 'paused' }
+    const paused = { ...state, status: 'paused' }
+    settleBoost(paused)
+    return paused
   }
   if (state.status === 'paused') {
     return { ...state, status: 'running' }
@@ -128,12 +131,23 @@ function collectsFish(fish, gap, state) {
   return (tailDx / WHEEL_RADIUS) ** 2 + (tailDy / WHEEL_RADIUS_Y) ** 2 <= 1
 }
 
-export function changeSpeed(state, direction) {
-  if (state.status !== 'running' || state.jumpStart !== null || (direction !== 1 && direction !== -1)) {
+function settleBoost(state) {
+  if (state.boosted && state.jumpStart === null) {
+    state.speed = START_SPEED
+    state.boosted = false
+  }
+}
+
+export function brake(state, boosting = false) {
+  if (state.status !== 'running' || state.jumpStart !== null) {
     return state
   }
-  const speed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, state.speed + direction * SPEED_STEP))
-  return speed === state.speed ? state : { ...state, speed }
+  const next = { ...state }
+  if (!boosting) {
+    settleBoost(next)
+  }
+  next.speed = Math.max(MIN_SPEED, next.speed - BRAKE_STEP)
+  return next
 }
 
 function updateJumpHeight(state) {
@@ -159,11 +173,15 @@ function updateJumpHeight(state) {
 function step(state, dt, boosting) {
   if (boosting && state.jumpStart === null) {
     state.speed = Math.min(MAX_SPEED, state.speed + BOOST_ACCELERATION * dt)
+    state.boosted = true
   }
   state.distance += state.speed * dt
   state.time += dt
   if (state.jumpStart !== null) {
     updateJumpHeight(state)
+    if (!boosting) {
+      settleBoost(state)
+    }
   }
 
   state.objects = state.objects.filter((object) => {
@@ -188,6 +206,9 @@ export function update(state, deltaSeconds, input = {}) {
     return state
   }
   const next = { ...state }
+  if (!input.boost) {
+    settleBoost(next)
+  }
   if (input.jump && next.jumpStart === null) {
     next.jumpStart = next.distance
   }
