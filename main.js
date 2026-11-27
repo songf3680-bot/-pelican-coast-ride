@@ -1,5 +1,5 @@
-import { changeSpeed, createGame, meters, PIXELS_PER_METER, start, togglePause, update } from './game.js'
-import { render } from './render.js'
+import { changeSpeed, createGame, meters, PIXELS_PER_METER, start, togglePause, update } from './game.js?v=hold-boost'
+import { render } from './render.js?v=hold-boost'
 
 const byId = (id) => document.getElementById(id)
 const canvas = byId('game')

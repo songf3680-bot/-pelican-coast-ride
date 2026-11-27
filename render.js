@@ -1,7 +1,7 @@
 import {
   FISH_RADIUS_X, FISH_RADIUS_Y, FISH_TAIL_X, FISH_TAIL_HALF_HEIGHT, fishHeight, GROUND_Y as GROUND,
   PLAYER_X, WHEEL_AXLE_OFFSET, WHEEL_RADIUS, WHEEL_RADIUS_Y
-} from './game.js'
+} from './game.js?v=hold-boost'
 
 const WIDTH = 480
 const CRANK = { x: -2, y: -14, radius: 4.5 }
