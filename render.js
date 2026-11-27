@@ -1,4 +1,7 @@
-import { GROUND_Y as GROUND, PLAYER_X, WHEEL_AXLE_OFFSET, WHEEL_RADIUS } from './game.js'
+import {
+  FISH_RADIUS_X, FISH_RADIUS_Y, FISH_TAIL_X, FISH_TAIL_HALF_HEIGHT, fishHeight, GROUND_Y as GROUND,
+  PLAYER_X, WHEEL_AXLE_OFFSET, WHEEL_RADIUS, WHEEL_RADIUS_Y
+} from './game.js'
 
 const WIDTH = 480
 const CRANK = { x: -2, y: -14, radius: 4.5 }
@@ -360,14 +363,12 @@ function drawBoards(ctx, offset) {
 }
 
 function drawFish(ctx, x, y, time, distance) {
-  const bob = Math.round(2 * Math.sin(time * 5 + distance * 0.035))
-  y += bob
-  ellipse(ctx, '#523d5e', x, y, 10, 7)
+  ellipse(ctx, '#523d5e', x, y, FISH_RADIUS_X, FISH_RADIUS_Y)
   ellipse(ctx, '#f0b162', x + 1, y, 7, 5)
   polygon(ctx, '#ffcd7e', [
     [x - 3, y],
-    [x - 9, y - 5],
-    [x - 9, y + 5]
+    [x + FISH_TAIL_X, y - FISH_TAIL_HALF_HEIGHT],
+    [x + FISH_TAIL_X, y + FISH_TAIL_HALF_HEIGHT]
   ])
   pixel(ctx, '#fff2b6', x - 2, y - 3, 6, 2)
   pixel(ctx, '#453c54', x + 4, y - 1, 2, 2)
@@ -424,7 +425,7 @@ function drawCastle(ctx, x) {
 }
 
 function drawWheel(ctx, x, y, angle) {
-  ellipse(ctx, '#1b2537', x, y, WHEEL_RADIUS, WHEEL_RADIUS + 1)
+  ellipse(ctx, '#1b2537', x, y, WHEEL_RADIUS, WHEEL_RADIUS_Y)
   ellipse(ctx, '#a8b4ae', x, y, 9, 9)
   ellipse(ctx, '#313e51', x, y, 8, 8)
   for (let spoke = 0; spoke < 6; spoke++) {
@@ -631,7 +632,7 @@ export function render(ctx, state) {
       continue
     }
     if (object.kind === 'fish') {
-      drawFish(ctx, x, GROUND - object.height, time, object.x)
+      drawFish(ctx, x, GROUND - fishHeight(object, time), time, object.x)
     }
     if (object.kind === 'castle') {
       drawCastle(ctx, x)

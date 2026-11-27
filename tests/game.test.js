@@ -89,12 +89,12 @@ test('a jump holds its takeoff speed through midair control changes until touchd
   assert.ok(update(airborne, frame, { brake: true }).speed < airborne.speed)
 })
 
-for (const [control, input, minTravel, maxAirtime, initialDistance] of [
-  ['braking', { brake: true }, 155, 1.27, 0],
-  ['coasting', {}, 155, 1.12, 0],
-  ['boosting at top speed', { boost: true }, 235, 1.4, 6000]
+for (const [control, input, expectedAirtime, expectedRange, initialDistance] of [
+  ['braking', { brake: true }, 1.25, 180, 0],
+  ['coasting', {}, 1.05, 182, 0],
+  ['boosting at top speed', { boost: true }, 1.05, 248, 6000]
 ]) {
-  test(`a jump stays brisk and covers at least ${minTravel}px while ${control}`, () => {
+  test(`a jump keeps its flight time and horizontal range while ${control}`, () => {
     const takeoff = advance(ride({ distance: initialDistance }), 0.8, input)
     const airborne = update(takeoff, physicsStep, { ...input, jump: true })
     assert.ok(airborne.y > 0)
@@ -103,8 +103,8 @@ for (const [control, input, minTravel, maxAirtime, initialDistance] of [
     assert.equal(landed.y, 0)
     const travel = landed.distance - takeoff.distance
     const airtime = landed.time - takeoff.time
-    assert.ok(travel >= minTravel, `jump covered only ${travel.toFixed(1)}px`)
-    assert.ok(airtime <= maxAirtime, `jump took ${airtime.toFixed(2)}s (limit ${maxAirtime}s)`)
+    assert.ok(Math.abs(airtime - expectedAirtime) <= physicsStep + 1e-8, `airtime: ${airtime}s`)
+    assert.ok(Math.abs(travel - expectedRange) < 3, `horizontal travel: ${travel}px`)
   })
 }
 
@@ -113,8 +113,12 @@ test('even at braking speed, the bike passes the highest pixel row without hover
   let state = update(takeoff, physicsStep, { jump: true })
   let peakRow = 0
   let timeAtPeak = 0
+  let timeNearPeak = 0
   while (state.jumpStart !== null && state.time - takeoff.time < landingTimeout) {
     const row = Math.round(state.y)
+    if (state.y >= 45) {
+      timeNearPeak += physicsStep
+    }
     if (row > peakRow) {
       peakRow = row
       timeAtPeak = 0
@@ -124,8 +128,9 @@ test('even at braking speed, the bike passes the highest pixel row without hover
     }
     state = update(state, physicsStep)
   }
-  assert.ok(peakRow > 0 && state.jumpStart === null)
+  assert.ok(peakRow === 48 && state.jumpStart === null)
   assert.ok(timeAtPeak < 0.13, `stayed at the highest pixel row for ${timeAtPeak.toFixed(2)}s`)
+  assert.ok(timeNearPeak < 0.18, `spent ${timeNearPeak.toFixed(2)}s within 3px of the apex`)
 })
 
 test('a collected fish only adds one point and leaves the next frame collectible-free', () => {
@@ -199,10 +204,36 @@ test('the opening route introduces ground fish before the first jump and its hig
   }
   assert.equal(state.status, 'running')
   assert.equal(state.score, 2)
-  state = advance(update(state, frame, { jump: true }), 0.9)
+  state = advance(update(state, frame, { jump: true }), 0.5)
   assert.equal(state.status, 'running')
   assert.equal(state.score, 3)
   assert.ok(state.distance > firstCastle.x)
+})
+
+test('the trailing wheel picks up a low fish after clearing the sandcastle', () => {
+  const castle = { kind: 'castle', x: 616, height: 0 }
+  const fish = { kind: 'fish', x: 714, height: 38 }
+  const takeoff = ride({ distance: castle.x - 35, speed: 216, objects: [castle, fish] })
+  let state = update(takeoff, physicsStep, { jump: true })
+  while (state.status === 'running' && state.distance < fish.x) {
+    state = update(state, physicsStep)
+  }
+  assert.equal(state.status, 'running')
+  assert.ok(state.y > 0 && state.objects.includes(fish))
+  const landed = advanceToLanding(state)
+  assert.equal(landed.status, 'running')
+  assert.equal(landed.score, 1)
+  assert.ok(!landed.objects.includes(fish))
+})
+
+test('both outer tire edges collect touching fish while a separated fish stays put', () => {
+  const rear = { kind: 'fish', x: 63, height: 12 }
+  // Only the tail of the fish ahead overlaps the upper-right edge of the front tire.
+  const front = { ...rear, x: 137, height: 21 }
+  const missed = { ...rear, x: 56 }
+  const caught = update(ride({ distance: 100, objects: [rear, front, missed] }), physicsStep)
+  assert.equal(caught.score, 2)
+  assert.deepEqual(caught.objects, [missed])
 })
 
 for (const takeoffGap of [31, 44, 100]) {
