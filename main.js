@@ -31,6 +31,7 @@ const keys = new Map([
   ['Space', 'jump'],
   ['KeyW', 'jump']
 ])
+const boostInputs = new Set()
 let jumpRequested = false
 let previousFrame = null
 let state = createGame(loadBest())
@@ -63,6 +64,7 @@ function draw() {
   showText(distance, meters(state.distance))
   showText(score, state.score)
   showText(best, state.best)
+  showSpeed()
 }
 
 function showSpeed() {
@@ -70,7 +72,6 @@ function showSpeed() {
 }
 
 function showStatus() {
-  showSpeed()
   const running = state.status === 'running'
   const paused = state.status === 'paused'
   overlay.hidden = running
@@ -113,6 +114,7 @@ function transition(next, moveFocus = true) {
   state = next
   previousFrame = null
   jumpRequested = false
+  boostInputs.clear()
   showStatus()
   draw()
   if (!moveFocus) {
@@ -139,8 +141,13 @@ function pauseForInactivity() {
   }
 }
 
-function rideAction(action) {
-  if (state.status !== 'running' || jumpRequested) return
+function rideAction(action, inputId) {
+  if (state.status !== 'running') return
+  if (action === 'boost' && inputId !== undefined) {
+    boostInputs.add(inputId)
+    return
+  }
+  if (jumpRequested) return
   if (action === 'jump') {
     jumpRequested = state.jumpStart === null
   } else {
@@ -176,8 +183,9 @@ window.addEventListener('keydown', (event) => {
     return
   }
   event.preventDefault()
-  if (!event.repeat) rideAction(action)
+  if (!event.repeat) rideAction(action, event.code)
 })
+window.addEventListener('keyup', (event) => boostInputs.delete(event.code))
 window.addEventListener('blur', pauseForInactivity)
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -190,14 +198,17 @@ for (const [action, control] of Object.entries(controls)) {
     if (event.button === 0 && state.status === 'running') {
       event.preventDefault()
       canvas.focus({ preventScroll: true })
-      rideAction(action)
+      if (action === 'boost') {
+        control.setPointerCapture(event.pointerId)
+      }
+      rideAction(action, event.pointerId)
     }
   })
   control.addEventListener('keydown', (event) => {
     if (event.code === 'Space' || event.code === 'Enter') {
       event.preventDefault()
       event.stopPropagation()
-      if (!event.repeat) rideAction(action)
+      if (!event.repeat) rideAction(action, event.code)
     }
   })
   control.addEventListener('click', (event) => {
@@ -205,9 +216,20 @@ for (const [action, control] of Object.entries(controls)) {
   })
 }
 
+for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+  controls.boost.addEventListener(event, ({ pointerId }) => boostInputs.delete(pointerId))
+}
+controls.boost.addEventListener('blur', () => {
+  boostInputs.delete('Space')
+  boostInputs.delete('Enter')
+})
+
 function frame(now) {
   if (state.status === 'running' && previousFrame !== null) {
-    const next = update(state, (now - previousFrame) / 1000, { jump: jumpRequested })
+    const next = update(state, (now - previousFrame) / 1000, {
+      boost: boostInputs.size > 0,
+      jump: jumpRequested
+    })
     if (next !== state) {
       jumpRequested = false
     }

@@ -26,6 +26,7 @@ const START_SPEED = 172
 const MIN_SPEED = 144
 const MAX_SPEED = 236
 const SPEED_STEP = 3 * PIXELS_PER_METER
+const BOOST_ACCELERATION = 12 * PIXELS_PER_METER
 const CASTLE_HALF_WIDTH = 5
 const CASTLE_TOP = 12
 const TIRE_HIT_RADIUS = 8
@@ -155,7 +156,10 @@ function updateJumpHeight(state) {
   state.y = arch + JUMP_EDGE_HEIGHT * edge * (2 - edge)
 }
 
-function step(state, dt) {
+function step(state, dt, boosting) {
+  if (boosting && state.jumpStart === null) {
+    state.speed = Math.min(MAX_SPEED, state.speed + BOOST_ACCELERATION * dt)
+  }
   state.distance += state.speed * dt
   state.time += dt
   if (state.jumpStart !== null) {
@@ -191,7 +195,7 @@ export function update(state, deltaSeconds, input = {}) {
   let remaining = Math.min(deltaSeconds, MAX_FRAME)
   while (remaining > 0 && next.status === 'running') {
     const dt = Math.min(remaining, STEP)
-    step(next, dt)
+    step(next, dt, input.boost)
     remaining -= dt
   }
   return next

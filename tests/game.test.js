@@ -17,9 +17,9 @@ function tapSpeed(state, taps) {
   return state
 }
 
-function advance(state, seconds) {
+function advance(state, seconds, input) {
   for (let elapsed = 0; elapsed < seconds && state.status === 'running'; elapsed += frame) {
-    state = update(state, frame)
+    state = update(state, frame, input)
   }
   return state
 }
@@ -77,6 +77,16 @@ test('repeated taps stop at each speed limit and a reverse tap takes effect imme
   assert.equal(changeSpeed(slowest, 1).speed, 174)
 })
 
+test('holding boost accelerates over time and releasing it preserves the attained speed', () => {
+  const initial = ride()
+  const shortHold = advance(initial, 0.2, { boost: true })
+  const longerHold = advance(initial, 0.4, { boost: true })
+  assert.ok(shortHold.speed > initial.speed)
+  assert.ok(longerHold.speed > shortHold.speed && longerHold.speed < 236)
+  assert.equal(advance(shortHold, 0.5).speed, shortHold.speed)
+  assert.equal(advance(longerHold, 0.4, { boost: true }).speed, 236)
+})
+
 test('a jump rises, ignores a second airborne impulse, and returns to the ground', () => {
   const rising = update(ride(), frame, { jump: true })
   assert.ok(rising.y > 0)
@@ -96,7 +106,7 @@ test('a jump holds its takeoff speed through midair control changes until touchd
 
   for (let step = 0; step * physicsStep < landingTimeout && airborne.y > 0; step += 1) {
     const tapped = changeSpeed(airborne, step % 2 === 0 ? 1 : -1)
-    const next = update(tapped, physicsStep)
+    const next = update(tapped, physicsStep, { boost: true })
     assert.equal(next.speed, takeoff.speed)
     const travel = next.distance - airborne.distance
     assert.ok(Math.abs(travel - takeoff.speed * physicsStep) < 1e-8)
