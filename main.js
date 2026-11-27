@@ -1,4 +1,4 @@
-import { changeSpeed, createGame, meters, start, togglePause, update } from './game.js'
+import { changeSpeed, createGame, meters, PIXELS_PER_METER, start, togglePause, update } from './game.js'
 import { render } from './render.js'
 
 const byId = (id) => document.getElementById(id)
@@ -11,6 +11,7 @@ const primary = byId('primary-action')
 const pause = byId('pause')
 const pauseLabel = byId('pause-label')
 const distance = byId('distance')
+const speed = byId('speed')
 const score = byId('score')
 const best = byId('best')
 const status = byId('status')
@@ -64,7 +65,12 @@ function draw() {
   showText(best, state.best)
 }
 
+function showSpeed() {
+  showText(speed, (state.speed / PIXELS_PER_METER).toFixed(1))
+}
+
 function showStatus() {
+  showSpeed()
   const running = state.status === 'running'
   const paused = state.status === 'paused'
   overlay.hidden = running
@@ -139,6 +145,7 @@ function rideAction(action) {
     jumpRequested = state.jumpStart === null
   } else {
     state = changeSpeed(state, action === 'boost' ? 1 : -1)
+    showSpeed()
   }
 }
 

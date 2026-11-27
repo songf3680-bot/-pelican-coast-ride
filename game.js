@@ -8,7 +8,7 @@ export const FISH_RADIUS_Y = 7
 export const FISH_TAIL_X = -9
 export const FISH_TAIL_HALF_HEIGHT = 5
 
-const PIXELS_PER_METER = 10
+export const PIXELS_PER_METER = 10
 const FIRST_CASTLE = 360
 const FIRST_SEGMENT = FIRST_CASTLE + 96
 const SEGMENT_LENGTH = 400
@@ -19,10 +19,13 @@ const MIN_JUMP_DISTANCE = 180
 const MIN_JUMP_TIME = 1.05
 const JUMP_HEIGHT = 48
 const JUMP_EDGE_HEIGHT = 10
-const JUMP_EDGE_DISTANCE = 10
+const TAKEOFF_EDGE_DISTANCE = 10
+const LANDING_EDGE_DISTANCE = 26
+const CREST_FRACTION = 0.14
 const START_SPEED = 172
 const MIN_SPEED = 144
 const MAX_SPEED = 236
+const SPEED_STEP = 3 * PIXELS_PER_METER
 const CASTLE_HALF_WIDTH = 5
 const CASTLE_TOP = 12
 const TIRE_HIT_RADIUS = 8
@@ -128,7 +131,7 @@ export function changeSpeed(state, direction) {
   if (state.status !== 'running' || state.jumpStart !== null || (direction !== 1 && direction !== -1)) {
     return state
   }
-  const speed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, state.speed + direction * PIXELS_PER_METER))
+  const speed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, state.speed + direction * SPEED_STEP))
   return speed === state.speed ? state : { ...state, speed }
 }
 
@@ -141,12 +144,14 @@ function updateJumpHeight(state) {
     return
   }
 
-  // Rise briskly off the ground so a late jump can still clear the obstacle.
   const progress = travelled / length
-  const edge = Math.min(1, travelled / JUMP_EDGE_DISTANCE, (length - travelled) / JUMP_EDGE_DISTANCE)
-  // Round the turn at halfway, with little time spent in the top pixel rows.
+  // Keep the short launch for late jumps; spread the descent over more boards.
+  const edge = Math.min(1, travelled / TAKEOFF_EDGE_DISTANCE, (length - travelled) / LANDING_EDGE_DISTANCE)
+  // The rounded cap meets the straight flanks with the same slope on each side.
   const fromPeak = Math.abs(2 * progress - 1)
-  const arch = (JUMP_HEIGHT - JUMP_EDGE_HEIGHT) * (1 - fromPeak ** 1.05)
+  const crest = Math.min(1, fromPeak / CREST_FRACTION)
+  const drop = fromPeak * crest * (1.5 - 0.5 * crest ** 2)
+  const arch = (JUMP_HEIGHT - JUMP_EDGE_HEIGHT) * (1 - drop)
   state.y = arch + JUMP_EDGE_HEIGHT * edge * (2 - edge)
 }
 

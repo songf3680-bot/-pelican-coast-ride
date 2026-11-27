@@ -427,6 +427,19 @@ canvas:focus-visible {
   }
 }
 
+@media (max-width: 400px) {
+  .telemetry {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 8px 18px;
+  }
+  .reading {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+  }
+}
+
 @media (hover: none) {
   .pedal kbd,
   .keyboard-shortcut {

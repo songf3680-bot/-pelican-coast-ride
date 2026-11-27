@@ -24,6 +24,10 @@
         <div class="instrument-panel">
           <dl class="telemetry" aria-label="骑行数据">
             <div class="reading">
+              <dt>车速</dt>
+              <dd aria-live="polite" aria-atomic="true"><span id="speed">17.2</span><small> m/s</small></dd>
+            </div>
+            <div class="reading">
               <dt>里程</dt>
               <dd><span id="distance">0</span><small> m</small></dd>
             </div>
@@ -94,7 +98,7 @@
       </section>
 
       <p class="shortcuts">
-        <span><span class="keyboard-shortcut"><kbd>←</kbd><kbd>→</kbd> </span>地面每按一次调速 1 米/秒</span>
+        <span><span class="keyboard-shortcut"><kbd>←</kbd><kbd>→</kbd> </span>地面每按一次调速 3 米/秒</span>
         <span class="shortcut-divider" aria-hidden="true">·</span>
         <span id="canvas-help">点击画面<span class="keyboard-shortcut">或按 <kbd>空格</kbd></span>跳跃</span>
         <span class="keyboard-shortcut shortcut-divider" aria-hidden="true">·</span>
